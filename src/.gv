@@ -1,0 +1,20 @@
+digraph {
+	expert_bias [label="expert_bias
+~
+Uniform" shape=ellipse]
+	ideal_credence [label="ideal_credence
+~
+Uniform" shape=ellipse]
+	expert_sd [label="expert_sd
+~
+HalfNormal" shape=ellipse]
+	subgraph cluster500 {
+		observed_judgements [label="observed_judgements
+~
+Normal" shape=ellipse style=filled]
+		label=500 labeljust=r labelloc=b style=rounded
+	}
+	expert_bias -> observed_judgements
+	ideal_credence -> observed_judgements
+	expert_sd -> observed_judgements
+}

@@ -2,3 +2,6 @@ numpy
 matplotlib
 seaborn
 scipy
+pymc
+graphviz
+corner
