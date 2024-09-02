@@ -16,7 +16,7 @@ st.title("Bayesian Updating with Expert Testimony")
 
 st.write("""
 This app simulates how a Bayesian agent updates their beliefs based on expert testimony.
-You can set your prior beliefs, define expert groups, and see how the beliefs change after 
+You can set your prior beliefs about specific propositions, define expert groups, and see how the beliefs change after 
 considering the experts' opinions.
 """)
 
@@ -28,6 +28,14 @@ st.sidebar.subheader("1. Define Your Beliefs")
 num_propositions = st.sidebar.number_input("Number of Propositions", 1, 5, 2, 
                                    help="How many different statements or ideas do you want to consider?")
 
+# Allow users to enter custom propositions
+proposition_descriptions = []
+for i in range(num_propositions):
+    default_prop = f"The global average temperature will rise by more than 2°C by 2050 (Proposition {i+1})"
+    prop = st.sidebar.text_input(f"Proposition {i+1}", value=default_prop, 
+                                 help="Enter a statement you want to assess")
+    proposition_descriptions.append(prop)
+
 prior_distribution = st.sidebar.selectbox("Prior Distribution Type", ["uniform", "normal", "beta"],
                                   help="What kind of distribution best represents your prior beliefs?")
 
@@ -35,19 +43,19 @@ prior_distribution = st.sidebar.selectbox("Prior Distribution Type", ["uniform",
 priors = {}
 if prior_distribution != "uniform":
     st.sidebar.write("Set Your Prior Beliefs")
-    for i in range(num_propositions):
-        st.sidebar.write(f"Proposition {i+1}")
+    for i, prop_desc in enumerate(proposition_descriptions):
+        st.sidebar.write(f"Proposition {i+1}: {prop_desc}")
         if prior_distribution == "normal":
             mean = st.sidebar.slider(f"Mean for Proposition {i+1}", 0.0, 1.0, 0.5, 0.01,
-                             help="The average value you expect for this proposition")
+                             help="The average probability you assign to this proposition being true")
             std = st.sidebar.slider(f"Standard Deviation for Proposition {i+1}", 0.01, 0.5, 0.2, 0.01,
-                            help="How uncertain you are about this value")
+                            help="How uncertain you are about this probability")
             priors[f'p{i+1}'] = {'mean': mean, 'std': std}
         elif prior_distribution == "beta":
             alpha = st.sidebar.slider(f"Alpha for Proposition {i+1}", 0.1, 10.0, 2.0, 0.1,
-                              help="Shape parameter for the beta distribution")
+                              help="Shape parameter for the beta distribution (higher values push the distribution to the right)")
             beta_param = st.sidebar.slider(f"Beta for Proposition {i+1}", 0.1, 10.0, 2.0, 0.1,
-                                   help="Shape parameter for the beta distribution")
+                                   help="Shape parameter for the beta distribution (higher values push the distribution to the left)")
             priors[f'p{i+1}'] = {'alpha': alpha, 'beta': beta_param}
 
 # Expert Groups setup
@@ -58,13 +66,15 @@ num_expert_groups = st.sidebar.number_input("Number of Expert Groups", 1, 5, 2,
 expert_groups = []
 for i in range(num_expert_groups):
     st.sidebar.write(f"Expert Group {i+1}")
-    n_experts = st.sidebar.number_input(f"Number of Experts in Group {i+1}", 10, 200, 100,
+    group_name = st.sidebar.text_input(f"Name for Expert Group {i+1}", value=f"Group {i+1}",
+                                       help="Give a name to this group of experts (e.g., 'Climate Scientists', 'Economists')")
+    n_experts = st.sidebar.number_input(f"Number of Experts in {group_name}", 10, 200, 100,
                                 help="How many experts are in this group?")
-    population_sd = st.sidebar.slider(f"Population Standard Deviation (Group {i+1})", 0.0, 1.0, 0.2, 0.1,
+    population_sd = st.sidebar.slider(f"Population Standard Deviation ({group_name})", 0.0, 1.0, 0.2, 0.1,
                               help="How much do the experts in this group tend to disagree with each other?")
-    population_bias = st.sidebar.slider(f"Population Bias (Group {i+1})", -1.0, 1.0, 0.1, 0.1,
+    population_bias = st.sidebar.slider(f"Population Bias ({group_name})", -1.0, 1.0, 0.1, 0.1,
                                 help="Does this group tend to overestimate or underestimate? (0 means no bias)")
-    expert_groups.append({"n_experts": n_experts, "population_sd": population_sd, "population_bias": population_bias})
+    expert_groups.append({"name": group_name, "n_experts": n_experts, "population_sd": population_sd, "population_bias": population_bias})
 
 # MCMC parameters in collapsible section
 st.sidebar.subheader("3. Advanced Settings")
@@ -86,8 +96,9 @@ if st.button("Run Simulation"):
 
     # Initialize expert groups
     expert_group_objects = []
-    for i, group in enumerate(expert_groups):
-        expert_group = Expert_Group(ideal_credences, name=f'Group {i+1}', **group)
+    for group in expert_groups:
+        expert_group = Expert_Group(ideal_credences, name=group['name'], n_experts=group['n_experts'], 
+                                    population_sd=group['population_sd'], population_bias=group['population_bias'])
         expert_group_objects.append(expert_group)
 
     # Initialize Bayesian agent
@@ -128,19 +139,20 @@ if st.button("Run Simulation"):
         elif prior_distribution == 'beta':
             alpha, beta_param = priors[prop]['alpha'], priors[prop]['beta']
             y = beta.pdf(x, a=alpha, b=beta_param)
-        axes_credences[0].plot(x, y, label=f'Prior {prop}')
+        axes_credences[0].plot(x, y, label=f'{proposition_descriptions[i]}')
         
         # Posterior
         az.plot_posterior(results, var_names=['ideal_credences'], coords={'ideal_credences_dim_0': [i]}, ax=axes_credences[1])
         
         # Truth
-        axes_credences[2].axvline(ideal_credences.credence_function[prop], color=f'C{i}', linestyle='--', label=f'Truth {prop}')
+        axes_credences[2].axvline(ideal_credences.credence_function[prop], color=f'C{i}', linestyle='--', label=f'{proposition_descriptions[i]}')
 
     axes_credences[0].set_title("Your Prior Beliefs")
-    axes_credences[0].legend()
+    axes_credences[0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     axes_credences[1].set_title("Updated Beliefs (Posterior)")
     axes_credences[2].set_title("True Values")
-    axes_credences[2].legend()
+    axes_credences[2].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
     st.pyplot(fig_credences)
 
     # Plot expert biases and SDs
@@ -149,16 +161,16 @@ if st.button("Run Simulation"):
         # Biases
         x = np.linspace(-1, 2, 1000)
         y = norm.pdf(x, loc=0.5, scale=0.2)
-        axes_experts[0, 0].plot(x, y, label=f'Prior Group {i+1}')
+        axes_experts[0, 0].plot(x, y, label=f'{expert_group.name}')
         az.plot_posterior(results, var_names=['expert_biases'], coords={'expert_biases_dim_0': [i]}, ax=axes_experts[0, 1])
-        axes_experts[0, 2].axvline(expert_group.population_bias, color=f'C{i}', linestyle='--', label=f'True Bias Group {i+1}')
+        axes_experts[0, 2].axvline(expert_group.population_bias, color=f'C{i}', linestyle='--', label=f'{expert_group.name}')
 
         # SDs
         x = np.linspace(0, 1, 1000)
         y = (2/(np.pi*0.2**2))**0.5 * np.exp(-x**2/(2*0.2**2))
-        axes_experts[1, 0].plot(x, y, label=f'Prior Group {i+1}')
+        axes_experts[1, 0].plot(x, y, label=f'{expert_group.name}')
         az.plot_posterior(results, var_names=['expert_sds'], coords={'expert_sds_dim_0': [i]}, ax=axes_experts[1, 1])
-        axes_experts[1, 2].axvline(expert_group.population_sd, color=f'C{i}', linestyle='--', label=f'True SD Group {i+1}')
+        axes_experts[1, 2].axvline(expert_group.population_sd, color=f'C{i}', linestyle='--', label=f'{expert_group.name}')
 
     axes_experts[0, 0].set_title("Prior Expert Biases")
     axes_experts[0, 0].legend()
@@ -171,7 +183,7 @@ if st.button("Run Simulation"):
     axes_experts[1, 1].set_title("Estimated Expert Standard Deviations")
     axes_experts[1, 2].set_title("True Expert Standard Deviations")
     axes_experts[1, 2].legend()
-
+    plt.tight_layout()
     st.pyplot(fig_experts)
 
 else:
