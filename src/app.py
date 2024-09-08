@@ -42,7 +42,7 @@ prior_distribution = st.sidebar.selectbox("Prior Distribution Type", ["uniform",
 # Allow users to set their priors
 priors = {}
 if prior_distribution != "uniform":
-    st.sidebar.write("Set Your Prior Beliefs")
+    st.sidebar.write("Set Your Priors for the Propositions")
     for i, prop_desc in enumerate(proposition_descriptions):
         st.sidebar.write(f"Proposition {i+1}: {prop_desc}")
         if prior_distribution == "normal":

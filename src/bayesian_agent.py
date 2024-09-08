@@ -19,23 +19,31 @@ class Bayesian_Agent():
         self.ideal_credences = ideal_credence_obj.credence_function
         self.propositions = list(self.ideal_credences.keys())
 
-    def get_hierarchical_model(self, expert_groups: list, prior_distribution='uniform', plot=True, alpha=2, beta=2, expert_bias_prior_mu=0.5, expert_bias_prior_sigma=0.2, expert_sd_prior_sigma=0.2):
+    def get_hierarchical_model(self, expert_groups: list, prior_distribution='uniform', priors=None, plot=True, expert_bias_prior_mu=0.5, expert_bias_prior_sigma=0.2, expert_sd_prior_sigma=0.2):
         ''' Sets up a hierarchical model for multiple expert groups and propositions using the specified prior distribution. '''
         self.expert_groups = expert_groups
         self.prior_distribution = prior_distribution
-        self.alpha = alpha
-        self.beta = beta
+        self.priors = priors or {}
         self.expert_bias_prior_mu = expert_bias_prior_mu
         self.expert_bias_prior_sigma = expert_bias_prior_sigma
         self.expert_sd_prior_sigma = expert_sd_prior_sigma
+        
         with pm.Model() as hierarchical_model:
             # Priors for ideal credences for each proposition
-            if prior_distribution == 'uniform':
-                ideal_credences = pm.Uniform('ideal_credences', lower=0, upper=1, shape=len(self.propositions))
-            elif prior_distribution == 'normal':
-                ideal_credences = pm.Normal('ideal_credences', mu=0.5, sigma=0.2, shape=len(self.propositions))
-            elif prior_distribution == 'beta':
-                ideal_credences = pm.Beta('ideal_credences', alpha=alpha, beta=beta, shape=len(self.propositions))
+            ideal_credences = []
+            for i, prop in enumerate(self.propositions):
+                if prior_distribution == 'uniform':
+                    ideal_credences.append(pm.Uniform(f'ideal_credence_{i}', lower=0, upper=1))
+                elif prior_distribution == 'normal':
+                    mean = self.priors[prop]['mean']
+                    std = self.priors[prop]['std']
+                    ideal_credences.append(pm.Normal(f'ideal_credence_{i}', mu=mean, sigma=std))
+                elif prior_distribution == 'beta':
+                    alpha = self.priors[prop]['alpha']
+                    beta = self.priors[prop]['beta']
+                    ideal_credences.append(pm.Beta(f'ideal_credence_{i}', alpha=alpha, beta=beta))
+            
+            ideal_credences = pm.math.stack(ideal_credences)
 
             # Priors for biases and standard deviations for each expert group
             expert_biases = pm.Normal('expert_biases', mu=expert_bias_prior_mu, sigma=expert_bias_prior_sigma, shape=(len(expert_groups), len(self.propositions)))
